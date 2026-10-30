@@ -23,13 +23,16 @@
   <section>
     <h2>Dane wydruku</h2>
     <label>Nazwa zlecenia <input id="nazwa" type="text" placeholder="opcjonalnie"></label>
-    <label>Masa Materiału [g] <input id="masa" type="number" min="0" step="any" value="120"></label>
-    <label>Cena filamentu [zł/kg] <input id="cenaFil" type="number" min="0" step="any" value="90"></label>
-    <label>Czas druku [h] <input id="czas" type="number" min="0" step="any" value="6.5"></label>
+    <label>Masa Materiału [g] <input id="masa" type="number" min="0" step="any" value="50"></label>
+    <label>Cena filamentu [zł/kg] <input id="cenaFil" type="number" min="0" step="any" value="60"></label>
+    <label>Czas druku [h] <input id="czas" type="number" min="0" step="any" value="2"></label>
     <label>Pobór mocy [W] <input id="moc" type="number" min="0" step="any" value="120"></label>
-    <label>Cena energii [zł/kWh] <input id="cenaPradu" type="number" min="0" step="any" value="1.2"></label>
-    <label>Stawka drukarki [zł/h] <input id="stawka" type="number" min="0" step="any" value="2.5"></label>
-    <label>Narzut [%] <input id="narzut" type="number" min="0" step="any" value="25"></label>
+    <label>Cena energii [zł/kWh] <input id="cenaPradu" type="number" min="0" step="any" value="1.1"></label>
+    <label>Stawka drukarki [zł/h] <input id="stawka" type="number" min="0" step="any" value="1"></label>
+    <label>Przygotowanie zlecenia [min] <input id="przygotowanie" type="number" min="0" step="any" value="10"></label>
+    <label>Obsługa 1 sztuki [min] <input id="obsluga" type="number" min="0" step="any" value="10"></label>
+    <label>Stawka pracy [zł/h] <input id="stawkaPracy" type="number" min="0" step="any" value="40"></label>
+    <label>Narzut [%] <input id="narzut" type="number" min="0" step="any" value="20"></label>
     <label>Liczba sztuk <input id="sztuki" type="number" min="1" step="1" value="1"></label>
   </section>
 
@@ -38,6 +41,7 @@
     <p>Filament <b id="rFil"></b></p>
     <p>Energia <b id="rPrad"></b></p>
     <p>Czas drukarki <b id="rDruk"></b></p>
+    <p>Praca / szt. <b id="rPraca"></b></p>
     <p>Koszt / szt. <b id="rKoszt"></b></p>
     <p>Cena / szt. (z narzutem) <b id="rCena"></b></p>
     <p>Razem <b id="rRazem"></b></p>
@@ -55,10 +59,11 @@
     const sztuki = Math.max(1, Math.round(val("sztuki")));
     const filament = val("masa") / 1000 * val("cenaFil");
     const prad = val("moc") / 1000 * val("czas") * val("cenaPradu");
-    const druk = val("czas") * val("stawka");
-    const koszt = filament + prad + druk;
+    const druk = val("czas") * val("stawka"); 
+    const praca = (val("przygotowanie") + val("obsluga") * sztuki) / 60 * val("stawkaPracy") / sztuki;
+    const koszt = filament + prad + druk + praca;
     const cena = koszt * (1 + val("narzut") / 100);
-    return { sztuki, filament, prad, druk, koszt, cena, razem: cena * sztuki };
+    return { sztuki, filament, prad, druk, praca, koszt, cena, razem: cena * sztuki };
   }
 
   function pokaz() {
@@ -66,6 +71,7 @@
     $("rFil").textContent = zl(w.filament);
     $("rPrad").textContent = zl(w.prad);
     $("rDruk").textContent = zl(w.druk);
+    $("rPraca").textContent = zl(w.praca);
     $("rKoszt").textContent = zl(w.koszt);
     $("rCena").textContent = zl(w.cena);
     $("rRazem").textContent = zl(w.razem);
@@ -83,6 +89,7 @@
           ${wiersz(`Filament (${val("masa")} g)`, zl(w.filament))}
           ${wiersz(`Energia (${val("czas")} h × ${val("moc")} W)`, zl(w.prad))}
           ${wiersz(`Czas drukarki (${val("czas")} h)`, zl(w.druk))}
+          ${wiersz(`Praca (${val("przygotowanie")} min przygotowania + ${val("obsluga")} min/szt.)`, zl(w.praca))}
           ${wiersz("Koszt / szt.", zl(w.koszt))}
           ${wiersz(`Narzut ${val("narzut")}%`, zl(w.cena - w.koszt))}
           ${wiersz("Cena / szt.", zl(w.cena))}
@@ -90,7 +97,7 @@
           ${wiersz("<b>Razem do zapłaty</b>", `<b>${zl(w.razem)}</b>`)}
         </table>
       </div>`;
-    html2pdf().set({ filename: nazwa || "kosztorys", margin: 10 }).from(html).save();
+    html2pdf().set({ filename: nazwa || "kosztorys"}).from(html).save();
   };
 
   document.querySelectorAll("input").forEach((i) => i.addEventListener("input", pokaz));

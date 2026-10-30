@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kalkulator druku 3D</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f0f0f0; margin: 0; padding: 16px; color: #1f2933; }
+    main { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    section { background: #fff; border-radius: 10px; padding: 20px; }
+    #wynik { background: #233e57; color: #fff; }
+    h2 { margin-top: 0; }
+    #wynik h2, #wynik b { color: #ffd21f; }
+    label { display: block; margin-bottom: 12px; font-weight: 600; }
+    input { display: block; width: 100%; box-sizing: border-box; padding: 8px; margin-top: 4px; font-size: 1rem; }
+    p { display: flex; justify-content: space-between; margin: 10px 0; }
+    button { margin-top: 12px; padding: 10px 18px; font-size: 1rem; background: #ffd21f; border: 0; border-radius: 6px; cursor: pointer; font-weight: 700; }
+    @media (max-width: 640px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h2>Dane wydruku</h2>
+    <label>Nazwa zlecenia <input id="nazwa" type="text" placeholder="opcjonalnie"></label>
+    <label>Masa Materiału [g] <input id="masa" type="number" min="0" step="any" value="120"></label>
+    <label>Cena filamentu [zł/kg] <input id="cenaFil" type="number" min="0" step="any" value="90"></label>
+    <label>Czas druku [h] <input id="czas" type="number" min="0" step="any" value="6.5"></label>
+    <label>Pobór mocy [W] <input id="moc" type="number" min="0" step="any" value="120"></label>
+    <label>Cena energii [zł/kWh] <input id="cenaPradu" type="number" min="0" step="any" value="1.2"></label>
+    <label>Stawka drukarki [zł/h] <input id="stawka" type="number" min="0" step="any" value="2.5"></label>
+    <label>Narzut [%] <input id="narzut" type="number" min="0" step="any" value="25"></label>
+    <label>Liczba sztuk <input id="sztuki" type="number" min="1" step="1" value="1"></label>
+  </section>
+
+  <section id="wynik">
+    <h2>Wynik</h2>
+    <p>Filament <b id="rFil"></b></p>
+    <p>Energia <b id="rPrad"></b></p>
+    <p>Czas drukarki <b id="rDruk"></b></p>
+    <p>Koszt / szt. <b id="rKoszt"></b></p>
+    <p>Cena / szt. (z narzutem) <b id="rCena"></b></p>
+    <p>Razem <b id="rRazem"></b></p>
+    <button id="pdf">Pobierz kosztorys PDF</button>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const val = (id) => Math.max(0, $(id).valueAsNumber || 0);
+  const zl = (x) => x.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " zł";
+
+  function oblicz() {
+    const sztuki = Math.max(1, Math.round(val("sztuki")));
+    const filament = val("masa") / 1000 * val("cenaFil");
+    const prad = val("moc") / 1000 * val("czas") * val("cenaPradu");
+    const druk = val("czas") * val("stawka");
+    const koszt = filament + prad + druk;
+    const cena = koszt * (1 + val("narzut") / 100);
+    return { sztuki, filament, prad, druk, koszt, cena, razem: cena * sztuki };
+  }
+
+  function pokaz() {
+    const w = oblicz();
+    $("rFil").textContent = zl(w.filament);
+    $("rPrad").textContent = zl(w.prad);
+    $("rDruk").textContent = zl(w.druk);
+    $("rKoszt").textContent = zl(w.koszt);
+    $("rCena").textContent = zl(w.cena);
+    $("rRazem").textContent = zl(w.razem);
+  }
+
+  $("pdf").onclick = () => {
+    const w = oblicz();
+    const wiersz = (a, b) => `<tr><td style="padding:6px;border-bottom:1px solid #ccc">${a}</td><td style="padding:6px;border-bottom:1px solid #ccc;text-align:right">${b}</td></tr>`;
+    const nazwa = $("nazwa").value.trim().replace(/[<>&]/g, "");
+    const html = `
+      <div style="font-family:Arial,sans-serif;padding:30px;color:#000">
+        <h1 style="margin:0">Kosztorys wydruku 3D</h1>
+        <div>Data: ${new Date().toLocaleDateString("pl-PL")}${nazwa ? `<br>Zlecenie: ${nazwa}` : ""}</div>
+        <table style="width:100%;border-collapse:collapse;margin-top:20px">
+          ${wiersz(`Filament (${val("masa")} g)`, zl(w.filament))}
+          ${wiersz(`Energia (${val("czas")} h × ${val("moc")} W)`, zl(w.prad))}
+          ${wiersz(`Czas drukarki (${val("czas")} h)`, zl(w.druk))}
+          ${wiersz("Koszt / szt.", zl(w.koszt))}
+          ${wiersz(`Narzut ${val("narzut")}%`, zl(w.cena - w.koszt))}
+          ${wiersz("Cena / szt.", zl(w.cena))}
+          ${wiersz("Liczba sztuk", w.sztuki)}
+          ${wiersz("<b>Razem do zapłaty</b>", `<b>${zl(w.razem)}</b>`)}
+        </table>
+      </div>`;
+    html2pdf().set({ filename: nazwa || "kosztorys", margin: 10 }).from(html).save();
+  };
+
+  document.querySelectorAll("input").forEach((i) => i.addEventListener("input", pokaz));
+  pokaz();
+</script>
+</body>
+</html>

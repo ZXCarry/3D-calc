@@ -1,106 +1,1145 @@
 <!doctype html>
-<html lang="pl">
+<html lang="pl" class="lvl-ultra">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kalkulator druku 3D</title>
+  <script>
+    // Ustaw zapamiętany poziom przed narysowaniem strony, żeby nie mignął inny wygląd
+    try {
+      const lvl = localStorage.getItem("vibe");
+      if (["zero", "medium", "ultra"].includes(lvl)) document.documentElement.className = "lvl-" + lvl;
+    } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: system-ui, sans-serif; background: #f0f0f0; margin: 0; padding: 16px; color: #1f2933; }
-    main { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    section { background: #fff; border-radius: 10px; padding: 20px; }
-    #wynik { background: #233e57; color: #fff; }
-    h2 { margin-top: 0; }
-    #wynik h2, #wynik b { color: #ffd21f; }
-    label { display: block; margin-bottom: 12px; font-weight: 600; }
-    input { display: block; width: 100%; box-sizing: border-box; padding: 8px; margin-top: 4px; font-size: 1rem; }
-    p { display: flex; justify-content: space-between; margin: 10px 0; }
-    button { margin-top: 12px; padding: 10px 18px; font-size: 1rem; background: #ffd21f; border: 0; border-radius: 6px; cursor: pointer; font-weight: 700; }
-    @media (max-width: 640px) { main { grid-template-columns: 1fr; } }
+    * { box-sizing: border-box; }
+
+    /* Elementy widoczne tylko na wybranym poziomie */
+    html:not(.lvl-zero) .only-zero,
+    html:not(.lvl-medium) .only-medium,
+    html:not(.lvl-ultra) .only-ultra,
+    .lvl-zero .no-zero { display: none !important; }
+
+    /* =====================================================
+       Przełącznik „Vibecoded level” (wspólny dla wszystkich)
+       ===================================================== */
+    .vibe {
+      position: fixed; top: 10px; left: 50%; z-index: 100;
+      transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 4px 4px 16px;
+      border-radius: 999px;
+      background: rgba(22, 22, 24, .82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, .12);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      font: 600 .78rem/1 Inter, system-ui, sans-serif;
+      color: #a1a1a6;
+      white-space: nowrap;
+    }
+    .seg { position: relative; display: flex; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .07); }
+    .seg button {
+      position: relative; z-index: 1;
+      padding: 7px 13px; border: 0; border-radius: 999px;
+      background: none; color: #d1d1d6; font: inherit; cursor: pointer;
+      transition: color .3s;
+    }
+    .seg .thumb {
+      position: absolute; top: 3px; bottom: 3px; left: 3px; width: 0;
+      border-radius: 999px;
+      transition: left .5s cubic-bezier(.16, 1, .3, 1), width .5s cubic-bezier(.16, 1, .3, 1), background .5s;
+    }
+    .lvl-zero .seg .thumb { background: #ffd21f; }
+    .lvl-zero .seg button[aria-pressed=true] { color: #000; }
+    .lvl-medium .seg .thumb { background: linear-gradient(135deg, #ff6a3d, #ff3d8b); }
+    .lvl-ultra .seg .thumb { background: linear-gradient(90deg, #ff6a3d, #ff3d8b, #a66bff, #3dd6ff, #ff6a3d); background-size: 300% 100%; animation: shift 3s linear infinite; box-shadow: 0 0 14px rgba(255, 61, 139, .9), 0 0 30px rgba(166, 107, 255, .6); }
+    .lvl-ultra .vibe { border-color: rgba(255, 61, 139, .5); box-shadow: 0 0 25px rgba(255, 61, 139, .35), 0 0 60px rgba(166, 107, 255, .25); }
+    .lvl-medium .seg button[aria-pressed=true], .lvl-ultra .seg button[aria-pressed=true] { color: #fff; }
+    @media (max-width: 430px) { .vibe-label { display: none; } .vibe { padding-left: 4px; } }
+
+    /* Wspólne animacje */
+    @keyframes shift { to { background-position: 300% 0; } }
+    @keyframes sweep { from { transform: translateX(-50px); } to { transform: translateX(50px); } }
+
+    /* =====================================================
+       ZERO: pierwsza, najprostsza wersja
+       ===================================================== */
+    .lvl-zero {
+      & body { font-family: system-ui, sans-serif; background: #f0f0f0; margin: 0; padding: 64px 16px 16px; color: #1f2933; }
+      .app { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .forms { display: flex; flex-direction: column; background: #fff; border-radius: 10px; padding: 20px; }
+      .forms .card, .fields { display: contents; }
+      .forms .card > h2 { display: none; }
+      & h2 { margin-top: 0; }
+      .field { display: block; margin-bottom: 12px; font-weight: 600; }
+      .field.f-sztuki { order: 1; }
+      .field > span[data-u]::after { content: " [" attr(data-u) "]"; }
+      .inp em { display: none; }
+      & input { display: block; width: 100%; padding: 8px; margin-top: 4px; font-size: 1rem; }
+      .result { background: #233e57; color: #fff; border-radius: 10px; padding: 20px; }
+      .result h2, .result b { color: #ffd21f; }
+      .zero-rows p { display: flex; justify-content: space-between; margin: 10px 0; }
+      .btn { margin-top: 12px; padding: 10px 18px; font-size: 1rem; background: #ffd21f; border: 0; border-radius: 6px; cursor: pointer; font-weight: 700; }
+      @media (max-width: 640px) { .app { grid-template-columns: 1fr; } }
+    }
+
+    /* =====================================================
+       MEDIUM: ciemne szklane karty
+       ===================================================== */
+    @keyframes float { to { transform: translate(80px, 60px) scale(1.15); } }
+    @keyframes pulse { 50% { opacity: .3; } }
+    @keyframes mBuild { 0% { clip-path: inset(100% 0 0 0); } 85%, 100% { clip-path: inset(0 0 0 0); } }
+    @keyframes mRise { 0% { transform: translateY(0); } 85%, 100% { transform: translateY(-140px); } }
+
+    .lvl-medium {
+      --bg: #07080d;
+      --card: rgba(255, 255, 255, .045);
+      --line: rgba(255, 255, 255, .09);
+      --text: #eceef6;
+      --muted: #8a8fa3;
+      --hot: #ff6a3d;
+      --pink: #ff3d8b;
+      --c-fil: #ff6a3d;
+      --c-prad: #ffd23f;
+      --c-druk: #3dd6ff;
+      --c-praca: #a66bff;
+      --c-narzut: #3dff9e;
+
+      & body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: clip;
+      }
+
+      .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+      .bg::before {
+        content: "";
+        position: absolute; inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, .04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, .04) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(ellipse at 50% 20%, #000 20%, transparent 75%);
+      }
+      .blob { position: absolute; border-radius: 50%; filter: blur(110px); opacity: .45; animation: float 18s ease-in-out infinite alternate; }
+      .blob.a { width: 520px; height: 520px; background: var(--hot); top: -180px; left: -120px; }
+      .blob.b { width: 460px; height: 460px; background: #5b3dff; top: 30%; right: -160px; animation-delay: -6s; }
+      .blob.c { width: 380px; height: 380px; background: var(--pink); bottom: -200px; left: 30%; opacity: .25; animation-delay: -12s; }
+
+      .hero {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 76px 20px 24px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 32px;
+      }
+      .tag {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--card);
+        color: var(--muted);
+        font: 500 .8rem "JetBrains Mono", monospace;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c-narzut); box-shadow: 0 0 12px var(--c-narzut); animation: pulse 1.6s infinite; }
+      .hero h1 { font-size: clamp(2.4rem, 6vw, 4.6rem); line-height: 1; letter-spacing: -.04em; margin: 22px 0 18px; font-weight: 700; }
+      .grad {
+        background: linear-gradient(90deg, var(--hot), var(--pink), #a66bff, var(--hot));
+        background-size: 300% 100%;
+        -webkit-background-clip: text; background-clip: text;
+        color: transparent;
+        animation: shift 8s linear infinite;
+      }
+      .hero p { color: var(--muted); font-size: 1.1rem; max-width: 520px; line-height: 1.6; margin: 0; }
+
+      .printer { position: relative; width: 260px; height: 250px; }
+      .printer::before, .printer::after {
+        content: ""; position: absolute; top: 0; bottom: 18px; width: 6px; border-radius: 3px;
+        background: linear-gradient(#2a2d3a, #15171f);
+      }
+      .printer::before { left: 10px; }
+      .printer::after { right: 10px; }
+      .bed {
+        position: absolute; left: 20px; right: 20px; bottom: 18px; height: 10px; border-radius: 4px;
+        background: linear-gradient(90deg, #1e2130, #3a3f55, #1e2130);
+        box-shadow: 0 14px 40px rgba(255, 106, 61, .35);
+      }
+      .model {
+        position: absolute; left: 50%; bottom: 28px; width: 110px; height: 140px;
+        transform: translateX(-50%);
+        border-radius: 46% 46% 10px 10px / 34% 34% 6px 6px;
+        background:
+          repeating-linear-gradient(0deg, rgba(0, 0, 0, .18) 0 2px, transparent 2px 5px),
+          linear-gradient(90deg, #c2421f, var(--hot) 40%, #ffb08f 55%, var(--hot) 70%, #a8381a);
+        animation: mBuild 7s linear infinite;
+      }
+      .gantry { position: absolute; left: 0; right: 0; bottom: 28px; height: 0; animation: mRise 7s linear infinite; }
+      .gantry::before {
+        content: ""; position: absolute; left: 4px; right: 4px; bottom: 30px; height: 8px; border-radius: 4px;
+        background: linear-gradient(#3a3f55, #1c1f2b);
+      }
+      .nozzle { position: absolute; bottom: 0; left: 50%; width: 30px; height: 34px; margin-left: -15px; animation: sweep .7s ease-in-out infinite alternate; }
+      .nozzle::before { content: ""; position: absolute; inset: 0 0 10px; border-radius: 5px; background: linear-gradient(#4a5070, #262a3a); }
+      .nozzle::after {
+        content: ""; position: absolute; bottom: 0; left: 9px; width: 12px; height: 12px;
+        clip-path: polygon(0 0, 100% 0, 60% 100%, 40% 100%);
+        background: #ffb347; box-shadow: 0 0 18px 6px rgba(255, 140, 50, .8);
+      }
+
+      .app {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 20px 20px 60px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+      .forms { display: grid; gap: 20px; }
+
+      .card {
+        position: relative;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 26px;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        overflow: hidden;
+      }
+      .card::before {
+        content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+        background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 106, 61, .12), transparent 60%);
+      }
+      .card:hover::before { opacity: 1; }
+
+      .card h2 { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em; }
+      .card h2 span {
+        font: 700 .75rem "JetBrains Mono", monospace;
+        padding: 5px 9px; border-radius: 8px;
+        background: linear-gradient(135deg, var(--hot), var(--pink));
+        color: #fff;
+      }
+
+      .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .field { display: block; }
+      .field.full { grid-column: 1 / -1; }
+      .field > span { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
+      .inp {
+        display: flex; align-items: center;
+        background: rgba(0, 0, 0, .35);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        transition: border-color .2s, box-shadow .2s;
+      }
+      .inp:focus-within { border-color: var(--hot); box-shadow: 0 0 0 4px rgba(255, 106, 61, .15), 0 0 30px rgba(255, 106, 61, .15); }
+      .inp input {
+        flex: 1; min-width: 0;
+        padding: 14px 16px;
+        background: none; border: 0; outline: 0;
+        color: var(--text);
+        font: 500 1.05rem "JetBrains Mono", monospace;
+      }
+      .inp input::placeholder { color: #50556a; font-family: "Space Grotesk", sans-serif; }
+      .inp em { font: normal 500 .78rem "JetBrains Mono", monospace; color: var(--muted); padding-right: 16px; white-space: nowrap; }
+      & input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+      & input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+      .result { position: sticky; top: 64px; padding: 30px; border-color: rgba(255, 106, 61, .25); box-shadow: 0 30px 80px -20px rgba(255, 61, 139, .25); }
+      .result::after {
+        content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+        background: linear-gradient(160deg, rgba(255, 106, 61, .7), transparent 40%, transparent 60%, rgba(166, 107, 255, .6));
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude;
+      }
+      .label { color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 500; }
+      .price {
+        font: 700 clamp(2.6rem, 5vw, 3.6rem) "JetBrains Mono", monospace;
+        letter-spacing: -.04em;
+        margin: 6px 0 4px;
+        background: linear-gradient(90deg, #fff, #ffd2c2);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .sub { color: var(--muted); font-size: .9rem; }
+      .sub b { color: var(--text); font-family: "JetBrains Mono", monospace; font-weight: 500; }
+
+      .bar { display: flex; height: 12px; border-radius: 99px; overflow: hidden; margin: 24px 0 18px; background: rgba(255, 255, 255, .06); gap: 2px; }
+      .bar i { display: block; height: 100%; background: var(--c); box-shadow: 0 0 16px var(--c); transition: width .5s cubic-bezier(.2, .8, .2, 1); }
+
+      .rows { display: grid; gap: 4px; }
+      .row { display: grid; grid-template-columns: 10px 1fr auto auto; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); }
+      .row i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); box-shadow: 0 0 10px var(--c); }
+      .row span { font-size: .95rem; }
+      .row small { color: var(--muted); font: .75rem "JetBrains Mono", monospace; }
+      .row b { font: 500 .95rem "JetBrains Mono", monospace; min-width: 92px; text-align: right; }
+      .row.sum { border-bottom: 0; }
+      .row.sum span, .row.sum b { font-weight: 700; }
+
+      .total {
+        margin: 18px 0 22px; padding: 18px 20px; border-radius: 16px;
+        background: linear-gradient(135deg, rgba(255, 106, 61, .16), rgba(166, 107, 255, .12));
+        border: 1px solid rgba(255, 255, 255, .08);
+        display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      }
+      .total b { font: 700 1.6rem "JetBrains Mono", monospace; }
+
+      .btn {
+        position: relative; overflow: hidden; width: 100%;
+        padding: 17px 22px; border: 0; border-radius: 14px; cursor: pointer;
+        font: 700 1rem "Space Grotesk", sans-serif; color: #fff; letter-spacing: .01em;
+        background: linear-gradient(135deg, var(--hot), var(--pink));
+        box-shadow: 0 12px 40px -8px rgba(255, 61, 139, .6);
+        transition: transform .15s, box-shadow .2s;
+      }
+      .btn::after {
+        content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent);
+        transform: skewX(-20deg); transition: left .6s;
+      }
+      .btn:hover { transform: translateY(-2px); box-shadow: 0 18px 50px -8px rgba(255, 61, 139, .8); }
+      .btn:hover::after { left: 120%; }
+      .btn:active { transform: translateY(0); }
+      .btn:disabled { opacity: .7; cursor: wait; }
+
+      & footer { text-align: center; color: #4d5265; font-size: .8rem; padding: 0 20px 30px; }
+
+      @media (max-width: 920px) {
+        .hero { grid-template-columns: 1fr; }
+        .printer { display: none; }
+        .app { grid-template-columns: 1fr; }
+        .result { position: static; }
+      }
+      @media (max-width: 520px) {
+        .fields { grid-template-columns: minmax(0, 1fr); }
+        .card, .result { padding: 20px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+      }
+    }
+
+    /* =====================================================
+       ULTRA MAX: styl Apple, animacje sterowane scrollem
+       ===================================================== */
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-100%); } }
+    @keyframes lineUp { to { transform: none; } }
+    @keyframes blurIn { from { opacity: 0; filter: blur(12px); transform: translateY(20px); } to { opacity: 1; filter: none; transform: none; } }
+    @property --ang { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+    @keyframes spin { to { --ang: 360deg; } }
+    @keyframes glowPulse { 50% { filter: drop-shadow(0 0 32px rgba(255, 61, 139, .95)); } }
+    @keyframes btnPulse { 50% { box-shadow: 0 0 0 6px rgba(255, 61, 139, .25), 0 18px 70px -4px rgba(255, 61, 139, 1), 0 0 40px rgba(166, 107, 255, .7); } }
+    @keyframes shine { 0%, 40% { left: -60%; } 100% { left: 130%; } }
+    @keyframes neon { 50% { text-shadow: 0 0 10px #fff, 0 0 30px #ff3d8b, 0 0 70px #ff6a3d; } }
+    @keyframes bump { 30% { transform: scale(1.06); filter: brightness(1.6) drop-shadow(0 0 30px rgba(255, 61, 139, .9)); } }
+
+    .lvl-ultra {
+      --bg: #000;
+      --line: rgba(255, 255, 255, .09);
+      --text: #f5f5f7;
+      --muted: #86868b;
+      --hot: #ff6a3d;
+      --pink: #ff3d8b;
+      --c-fil: #ff6a3d;
+      --c-prad: #ffd23f;
+      --c-druk: #3dd6ff;
+      --c-praca: #a66bff;
+      --c-narzut: #3dff9e;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+      scroll-behavior: smooth;
+
+      & body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: clip;
+      }
+
+      /* Nawigacja */
+      .nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+        height: 52px; padding: 0 max(20px, calc(50% - 570px));
+        display: flex; align-items: center; justify-content: space-between;
+        transition: background .4s, border-color .4s;
+        border-bottom: 1px solid transparent;
+        animation: fadeDown 1s var(--ease) both;
+      }
+      .nav.solid {
+        background: rgba(22, 22, 23, .72);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        border-color: rgba(255, 255, 255, .08);
+      }
+      .brand { font-weight: 600; letter-spacing: -.01em; font-size: 1.05rem; }
+      .brand b { background: linear-gradient(90deg, var(--hot), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .pill {
+        padding: 7px 16px; border-radius: 999px; border: 0;
+        background: var(--text); color: #000; font-weight: 600; font-size: .82rem;
+        text-decoration: none; cursor: pointer; transition: transform .3s var(--ease), background .3s;
+      }
+      .pill:hover { transform: scale(1.05); background: #fff; }
+      .vibe { top: 9px; }
+      @media (max-width: 780px) { .brand, .pill { display: none; } }
+
+      /* Scena z drukarką */
+      .scene { position: relative; height: 280vh; }
+      .sticky {
+        position: sticky; top: 0; height: 100vh; overflow: hidden;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-align: center; padding: 60px 20px 0;
+      }
+      .sticky::before {
+        content: ""; position: absolute; inset: 0; z-index: -1;
+        background:
+          radial-gradient(ellipse 60% 45% at 50% 75%, rgba(255, 106, 61, calc(.2 + var(--build, 0) * .35)), transparent 70%),
+          linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px) 0 0 / 44px 44px,
+          linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px) 0 0 / 44px 44px;
+        mask-image: radial-gradient(ellipse 70% 42% at 50% 55%, #000 35%, transparent 100%);
+      }
+      .hero-text { will-change: transform, opacity, filter; }
+      .eyebrow { color: var(--hot); font-weight: 600; font-size: 1.05rem; letter-spacing: -.01em; opacity: 0; animation: blurIn 1.2s var(--ease) .2s forwards; }
+      .hero-text h1 { font-size: clamp(2.8rem, 8vw, 6rem); line-height: 1.02; letter-spacing: -.045em; font-weight: 700; margin: 12px 0 18px; }
+      .line { display: block; overflow: hidden; padding-bottom: .08em; }
+      .line > span { display: inline-block; transform: translateY(110%); animation: lineUp 1.3s var(--ease) forwards; }
+      .line:nth-child(2) > span { animation-delay: .15s; }
+      .line > .grad {
+        background: linear-gradient(90deg, var(--hot), var(--pink), #a66bff, var(--hot));
+        background-size: 300% 100%;
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        animation: lineUp 1.3s var(--ease) .15s forwards, shift 8s linear infinite;
+      }
+      .hero-text p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.3rem); max-width: 560px; margin: 0 auto; line-height: 1.5; opacity: 0; animation: blurIn 1.2s var(--ease) .5s forwards; }
+
+      .stage { position: relative; margin-top: 30px; opacity: 0; animation: blurIn 1.6s var(--ease) .7s forwards; }
+      .printer { position: relative; width: 260px; height: 250px; transform-origin: 50% 0; will-change: transform; }
+      .printer::before, .printer::after {
+        content: ""; position: absolute; top: 0; bottom: 18px; width: 6px; border-radius: 3px;
+        background: linear-gradient(#3a3d4a, #15171f);
+      }
+      .printer::before { left: 10px; }
+      .printer::after { right: 10px; }
+      .bed {
+        position: absolute; left: 20px; right: 20px; bottom: 18px; height: 10px; border-radius: 4px;
+        background: linear-gradient(90deg, #1e2130, #4a4f66, #1e2130);
+        box-shadow: 0 14px 60px rgba(255, 106, 61, calc(.35 + var(--build, 0) * .6)), 0 0 20px rgba(255, 61, 139, .5);
+      }
+      .model {
+        position: absolute; left: 50%; bottom: 28px; width: 110px; height: 140px;
+        transform: translateX(-50%);
+        border-radius: 46% 46% 10px 10px / 34% 34% 6px 6px;
+        background:
+          repeating-linear-gradient(0deg, rgba(0, 0, 0, .2) 0 1.5px, transparent 1.5px 4px),
+          linear-gradient(90deg, #c2421f, var(--hot) 40%, #ffb08f 55%, var(--hot) 70%, #a8381a);
+        clip-path: inset(calc((1 - var(--build, 0)) * 100%) 0 0 0);
+      }
+      .gantry { position: absolute; left: 0; right: 0; bottom: 28px; height: 0; transform: translateY(calc(var(--build, 0) * -140px)); }
+      .gantry::before {
+        content: ""; position: absolute; left: 4px; right: 4px; bottom: 30px; height: 8px; border-radius: 4px;
+        background: linear-gradient(#4a4f66, #1c1f2b);
+      }
+      .nozzle { position: absolute; bottom: 0; left: 50%; width: 30px; height: 34px; margin-left: -15px; animation: sweep .7s ease-in-out infinite alternate; }
+      .nozzle::before { content: ""; position: absolute; inset: 0 0 10px; border-radius: 5px; background: linear-gradient(#5a6080, #262a3a); }
+      .nozzle::after {
+        content: ""; position: absolute; bottom: 0; left: 9px; width: 12px; height: 12px;
+        clip-path: polygon(0 0, 100% 0, 60% 100%, 40% 100%);
+        background: #ffb347; box-shadow: 0 0 22px 8px rgba(255, 140, 50, .9), 0 0 60px 20px rgba(255, 61, 139, .4);
+        transition: background .6s, box-shadow .6s;
+      }
+      .printer.done .nozzle { animation-play-state: paused; }
+      .printer.done .nozzle::after { background: #555a70; box-shadow: none; }
+
+      .status { margin-top: 18px; font: 500 .8rem "JetBrains Mono", monospace; color: var(--muted); letter-spacing: .05em; min-height: 1.2em; }
+      .status.done { color: var(--c-narzut); }
+
+      /* Zdanie rozświetlane przewijaniem */
+      .statement { max-width: 980px; margin: 0 auto; padding: 18vh 20px 22vh; }
+      .statement p { font-size: clamp(2rem, 5.2vw, 4rem); line-height: 1.12; letter-spacing: -.035em; font-weight: 700; margin: 0; }
+      .statement span { color: #2a2a2d; transition: color .5s var(--ease); }
+      .statement span.lit { color: var(--text); }
+      .statement span.lit.hl { color: var(--hot); }
+
+      /* Pojawianie się elementów */
+      [data-reveal] {
+        opacity: 0; transform: translateY(60px) scale(.97); filter: blur(10px);
+        transition: opacity 1.2s var(--ease), transform 1.2s var(--ease), filter 1.2s var(--ease);
+        transition-delay: var(--d, 0s);
+      }
+      [data-reveal].in { opacity: 1; transform: none; filter: none; }
+
+      .section-head { text-align: center; max-width: 1180px; margin: 0 auto; padding: 0 20px 40px; }
+      .section-head h2 { font-size: clamp(2.6rem, 7vw, 5rem); letter-spacing: -.045em; margin: 0; font-weight: 700; }
+      .section-head p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.3rem); margin: 10px 0 0; }
+
+      /* Kalkulator */
+      .app {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 20px 20px 80px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+      .forms { display: grid; gap: 20px; }
+
+      .card {
+        position: relative;
+        background: #111113;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 28px;
+        overflow: hidden;
+      }
+      .card::before {
+        content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s;
+        background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 106, 61, .22), rgba(166, 107, 255, .08) 40%, transparent 65%);
+      }
+      .card:hover::before { opacity: 1; }
+
+      .card h2 { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; }
+      .card h2 span {
+        font: 700 .75rem "JetBrains Mono", monospace;
+        padding: 5px 9px; border-radius: 8px;
+        background: linear-gradient(135deg, var(--hot), var(--pink));
+        color: #fff;
+      }
+
+      .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .field { display: block; }
+      .field.full { grid-column: 1 / -1; }
+      .field > span { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
+      .inp {
+        display: flex; align-items: center;
+        background: #1c1c1e;
+        border: 1px solid transparent;
+        border-radius: 14px;
+        transition: border-color .3s, box-shadow .3s, transform .3s var(--ease);
+      }
+      .inp:focus-within { border-color: var(--hot); box-shadow: 0 0 0 4px rgba(255, 106, 61, .25), 0 0 40px rgba(255, 61, 139, .45); transform: scale(1.02); }
+      .inp input {
+        flex: 1; min-width: 0;
+        padding: 14px 16px;
+        background: none; border: 0; outline: 0;
+        color: var(--text);
+        font: 500 1.05rem "JetBrains Mono", monospace;
+      }
+      .inp input::placeholder { color: #545458; font-family: Inter, sans-serif; }
+      .inp em { font: normal 500 .78rem "JetBrains Mono", monospace; color: var(--muted); padding-right: 16px; white-space: nowrap; }
+      & input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+      & input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+      /* Wynik */
+      .result { position: sticky; top: 72px; padding: 32px; box-shadow: 0 40px 120px -20px rgba(255, 61, 139, .55), 0 0 80px -10px rgba(166, 107, 255, .35); }
+      .label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+      .price {
+        font: 700 clamp(2.6rem, 5vw, 3.8rem) Inter, sans-serif;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -.045em;
+        margin: 6px 0 4px;
+        background: linear-gradient(90deg, #fff, #ffd2c2, #ff8ab8, #fff);
+        background-size: 300% 100%;
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        filter: drop-shadow(0 0 18px rgba(255, 106, 61, .6));
+        animation: shift 5s linear infinite, glowPulse 2.4s ease-in-out infinite;
+        transform-origin: left center;
+      }
+      .price.bump { animation: bump .6s var(--ease); }
+      .sub { color: var(--muted); font-size: .9rem; }
+      .sub b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+      .bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin: 26px 0 18px; background: rgba(255, 255, 255, .06); gap: 2px; }
+      .bar i { display: block; height: 100%; width: 0; background: var(--c); transition: width 1s var(--ease); }
+
+      .rows { display: grid; gap: 2px; }
+      .row { display: grid; grid-template-columns: 10px 1fr auto auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+      .row i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+      .row span { font-size: .95rem; }
+      .row small { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+      .row b { font-weight: 600; font-size: .95rem; min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+      .row.sum { border-bottom: 0; }
+
+      .total {
+        margin: 18px 0 22px; padding: 18px 20px; border-radius: 18px;
+        background: #1c1c1e;
+        display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      }
+      .total b { font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+
+      .btn {
+        position: relative; overflow: hidden; width: 100%;
+        padding: 17px 22px; border: 0; border-radius: 999px; cursor: pointer;
+        font: 600 1rem Inter, sans-serif; color: #fff;
+        background: linear-gradient(90deg, var(--hot), var(--pink), #a66bff, var(--pink), var(--hot));
+        background-size: 300% 100%;
+        box-shadow: 0 12px 40px -8px rgba(255, 61, 139, .7);
+        animation: shift 4s linear infinite, btnPulse 2s ease-in-out infinite;
+        transition: transform .4s var(--ease);
+      }
+      .btn::after {
+        content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .6), transparent);
+        transform: skewX(-20deg); animation: shine 2.8s var(--ease) infinite;
+      }
+      .btn:hover { transform: scale(1.04); }
+      .btn:active { transform: scale(.97); }
+      .btn:disabled { opacity: .7; cursor: wait; }
+
+      /* ===== ULTRA MAX VIBECODED: światełka wszędzie ===== */
+      .aurora { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+      .aurora i { position: absolute; border-radius: 50%; filter: blur(120px); opacity: .45; animation: float 14s ease-in-out infinite alternate; }
+      .aurora i:nth-child(1) { width: 620px; height: 620px; background: var(--hot); top: -220px; left: -160px; }
+      .aurora i:nth-child(2) { width: 540px; height: 540px; background: #a66bff; top: 40%; right: -220px; animation-delay: -5s; }
+      .aurora i:nth-child(3) { width: 500px; height: 500px; background: var(--pink); bottom: -240px; left: 25%; animation-delay: -9s; }
+      .aurora i:nth-child(4) { width: 380px; height: 380px; background: #3dd6ff; top: 25%; left: 40%; opacity: .2; animation-delay: -3s; }
+
+      .spot {
+        position: fixed; left: 0; top: 0; z-index: 40; width: 700px; height: 700px; margin: -350px 0 0 -350px;
+        transform: translate(var(--cx, -999px), var(--cy, -999px));
+        background: radial-gradient(circle, rgba(255, 106, 61, .18), rgba(166, 107, 255, .1) 35%, transparent 65%);
+        mix-blend-mode: screen; pointer-events: none;
+      }
+      .progress {
+        position: fixed; top: 0; left: 0; z-index: 101; height: 3px; width: calc(var(--sp, 0) * 100%);
+        background: linear-gradient(90deg, #ff6a3d, #ff3d8b, #a66bff, #3dd6ff);
+        box-shadow: 0 0 12px #ff3d8b, 0 0 30px #a66bff;
+      }
+      #sparks { position: fixed; inset: 0; z-index: 90; width: 100%; height: 100%; pointer-events: none; }
+
+      .sticky::after {
+        content: ""; position: absolute; inset: -50%; z-index: -1; pointer-events: none;
+        background: repeating-conic-gradient(from var(--ang) at 50% 50%, rgba(255, 140, 90, .07) 0 5deg, transparent 5deg 15deg);
+        mask-image: radial-gradient(circle at 50% 50%, #000 0, transparent 45%);
+        animation: spin 40s linear infinite;
+      }
+      .printer { filter: drop-shadow(0 0 22px rgba(255, 106, 61, .55)) drop-shadow(0 0 60px rgba(255, 61, 139, .25)); }
+      .eyebrow { text-shadow: 0 0 14px var(--hot), 0 0 40px var(--hot); }
+      /* Poświata na całym h1, bo .line przycina (overflow: hidden) i ucinałby ją do prostokąta */
+      .hero-text h1 { filter: drop-shadow(0 0 22px rgba(255, 61, 139, .55)) drop-shadow(0 0 60px rgba(166, 107, 255, .35)); }
+      .status { text-shadow: 0 0 10px currentColor; }
+      .status.done { animation: neon 1.5s ease-in-out infinite; }
+
+      .statement span.lit { text-shadow: 0 0 30px rgba(255, 255, 255, .35); }
+      .statement span.lit.hl {
+        background: linear-gradient(90deg, var(--hot), var(--pink), #a66bff, var(--hot));
+        background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+        text-shadow: none;
+        filter: drop-shadow(0 0 18px rgba(255, 61, 139, .8));
+        animation: shift 5s linear infinite;
+      }
+      .section-head h2 {
+        background: linear-gradient(90deg, #fff, #ffb08f, var(--pink), #a66bff, #3dd6ff, #fff);
+        background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+        filter: drop-shadow(0 0 30px rgba(255, 61, 139, .6));
+        animation: shift 6s linear infinite;
+      }
+
+      .card { box-shadow: 0 0 50px -12px rgba(255, 61, 139, .4), 0 0 90px -30px rgba(166, 107, 255, .5); }
+      .card::after {
+        content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+        background: conic-gradient(from var(--ang), #ff6a3d, #ff3d8b, #a66bff, #3dd6ff, #3dff9e, #ffd23f, #ff6a3d);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude;
+        animation: spin 4s linear infinite;
+      }
+      .result { box-shadow: 0 40px 120px -20px rgba(255, 61, 139, .55), 0 0 80px -10px rgba(166, 107, 255, .35); }
+      .card h2 span { box-shadow: 0 0 16px rgba(255, 61, 139, .8); }
+      .bar { overflow: visible; }
+      .bar i { box-shadow: 0 0 14px var(--c), 0 0 4px var(--c); }
+      .bar i:first-child { border-radius: 99px 0 0 99px; }
+      .bar i:last-child { border-radius: 0 99px 99px 0; }
+      .row i { box-shadow: 0 0 12px var(--c), 0 0 4px var(--c); }
+      .row b { text-shadow: 0 0 14px rgba(255, 255, 255, .35); }
+      .total { background: linear-gradient(135deg, rgba(255, 106, 61, .22), rgba(166, 107, 255, .22)); box-shadow: inset 0 0 30px rgba(255, 61, 139, .2); }
+      .total b { text-shadow: 0 0 20px rgba(255, 61, 139, .9); }
+      .brand b { filter: drop-shadow(0 0 10px var(--pink)); }
+      .pill { box-shadow: 0 0 20px rgba(255, 255, 255, .45), 0 0 40px rgba(255, 61, 139, .4); }
+
+      & footer { text-align: center; color: #48484c; font-size: .8rem; padding: 0 20px 40px; }
+
+      @media (max-width: 920px) {
+        .app { grid-template-columns: 1fr; }
+        .result { position: static; }
+      }
+      @media (max-width: 520px) {
+        .fields { grid-template-columns: minmax(0, 1fr); }
+        .card, .result { padding: 22px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+        .eyebrow, .hero-text p, .stage, .line > span { opacity: 1; transform: none; }
+        .scene { height: auto; }
+        .sticky { position: relative; height: auto; min-height: 100vh; }
+        [data-reveal] { opacity: 1; transform: none; filter: none; }
+        .statement span { color: var(--text); }
+      }
+    }
   </style>
 </head>
 <body>
-<main>
-  <section>
-    <h2>Dane wydruku</h2>
-    <label>Nazwa zlecenia <input id="nazwa" type="text" placeholder="opcjonalnie"></label>
-    <label>Masa Materiału [g] <input id="masa" type="number" min="0" step="any" value="50"></label>
-    <label>Cena filamentu [zł/kg] <input id="cenaFil" type="number" min="0" step="any" value="60"></label>
-    <label>Czas druku [h] <input id="czas" type="number" min="0" step="any" value="2"></label>
-    <label>Pobór mocy [W] <input id="moc" type="number" min="0" step="any" value="120"></label>
-    <label>Cena energii [zł/kWh] <input id="cenaPradu" type="number" min="0" step="any" value="1.1"></label>
-    <label>Stawka drukarki [zł/h] <input id="stawka" type="number" min="0" step="any" value="1"></label>
-    <label>Przygotowanie zlecenia [min] <input id="przygotowanie" type="number" min="0" step="any" value="10"></label>
-    <label>Obsługa 1 sztuki [min] <input id="obsluga" type="number" min="0" step="any" value="10"></label>
-    <label>Stawka pracy [zł/h] <input id="stawkaPracy" type="number" min="0" step="any" value="40"></label>
-    <label>Narzut [%] <input id="narzut" type="number" min="0" step="any" value="20"></label>
-    <label>Liczba sztuk <input id="sztuki" type="number" min="1" step="1" value="1"></label>
-  </section>
+<div class="vibe" role="group" aria-label="Vibecoded level">
+  <span class="vibe-label">Vibecoded level</span>
+  <div class="seg">
+    <span class="thumb" aria-hidden="true"></span>
+    <button type="button" data-lvl="zero">Zero</button>
+    <button type="button" data-lvl="medium">Medium</button>
+    <button type="button" data-lvl="ultra">Ultra max</button>
+  </div>
+</div>
 
-  <section id="wynik">
-    <h2>Wynik</h2>
-    <p>Filament <b id="rFil"></b></p>
-    <p>Energia <b id="rPrad"></b></p>
-    <p>Czas drukarki <b id="rDruk"></b></p>
-    <p>Praca / szt. <b id="rPraca"></b></p>
-    <p>Koszt / szt. <b id="rKoszt"></b></p>
-    <p>Cena / szt. (z narzutem) <b id="rCena"></b></p>
-    <p>Razem <b id="rRazem"></b></p>
-    <button id="pdf">Pobierz kosztorys PDF</button>
-  </section>
+<!-- ===== MEDIUM: tło i nagłówek ===== -->
+<div class="bg only-medium" aria-hidden="true"><div class="blob a"></div><div class="blob b"></div><div class="blob c"></div></div>
+<header class="hero only-medium">
+  <div>
+    <span class="tag">FDM · wycena na żywo</span>
+    <h1>Policz wydruk<br><span class="grad">co do grosza.</span></h1>
+    <p>Filament, prąd, maszyna i robota w jednym miejscu. Kosztorys PDF dla klienta jednym kliknięciem.</p>
+  </div>
+  <div class="printer" aria-hidden="true">
+    <div class="bed"></div>
+    <div class="model"></div>
+    <div class="gantry"><div class="nozzle"></div></div>
+  </div>
+</header>
+
+<!-- ===== ULTRA: światełka, nawigacja, scena, zdanie ===== -->
+<div class="aurora only-ultra" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+<div class="spot only-ultra" id="spot" aria-hidden="true"></div>
+<div class="progress only-ultra" aria-hidden="true"></div>
+<canvas id="sparks" class="only-ultra" aria-hidden="true"></canvas>
+<nav class="nav only-ultra" id="nav">
+  <div class="brand">Kalkulator <b>3D</b></div>
+  <a class="pill" href="#wycena">Wyceń wydruk</a>
+</nav>
+
+<section class="scene only-ultra" id="scene">
+  <div class="sticky" id="sticky">
+    <div class="hero-text" id="heroText">
+      <div class="eyebrow">Kalkulator druku 3D</div>
+      <h1><span class="line"><span>Policz wydruk</span></span><span class="line"><span class="grad">co do grosza.</span></span></h1>
+      <p>Filament, prąd, maszyna i robota w jednym miejscu. Kosztorys PDF dla klienta jednym kliknięciem.</p>
+    </div>
+    <div class="stage">
+      <div class="printer" id="printer" aria-hidden="true">
+        <div class="bed"></div>
+        <div class="model"></div>
+        <div class="gantry"><div class="nozzle"></div></div>
+      </div>
+      <div class="status" id="status">Przewiń, aby wydrukować</div>
+    </div>
+  </div>
+</section>
+
+<section class="statement only-ultra">
+  <p id="statement">Każdy gram filamentu. Każda minuta pracy maszyny. Każdy kilowat. <em>Policzone, zanim klient zapyta o cenę.</em></p>
+</section>
+
+<div class="section-head only-ultra" id="wycena" data-reveal>
+  <h2>Wycena.</h2>
+  <p>Wpisz dane ze slicera. Resztę policzymy za Ciebie.</p>
+</div>
+
+<!-- ===== KALKULATOR (wspólny dla wszystkich poziomów) ===== -->
+<main class="app" id="kalkulator">
+  <div class="forms">
+    <h2 class="only-zero">Dane wydruku</h2>
+    <section class="card" data-reveal>
+      <h2><span>01</span> Zlecenie i materiał</h2>
+      <div class="fields">
+        <label class="field full"><span>Nazwa zlecenia</span><div class="inp"><input id="nazwa" type="text" placeholder="np. Uchwyt na kamerę (opcjonalnie)"></div></label>
+        <label class="field"><span data-u="g">Masa materiału</span><div class="inp"><input id="masa" type="number" min="0" step="any" value="50"><em>g</em></div></label>
+        <label class="field"><span data-u="zł/kg">Cena filamentu</span><div class="inp"><input id="cenaFil" type="number" min="0" step="any" value="60"><em>zł/kg</em></div></label>
+        <label class="field full f-sztuki"><span>Liczba sztuk</span><div class="inp"><input id="sztuki" type="number" min="1" step="1" value="1"><em>szt.</em></div></label>
+      </div>
+    </section>
+
+    <section class="card" data-reveal>
+      <h2><span>02</span> Maszyna i energia</h2>
+      <div class="fields">
+        <label class="field"><span data-u="h">Czas druku</span><div class="inp"><input id="czas" type="number" min="0" step="any" value="2"><em>h</em></div></label>
+        <label class="field"><span data-u="W">Pobór mocy</span><div class="inp"><input id="moc" type="number" min="0" step="any" value="120"><em>W</em></div></label>
+        <label class="field"><span data-u="zł/kWh">Cena energii</span><div class="inp"><input id="cenaPradu" type="number" min="0" step="any" value="1.1"><em>zł/kWh</em></div></label>
+        <label class="field"><span data-u="zł/h">Stawka drukarki</span><div class="inp"><input id="stawka" type="number" min="0" step="any" value="1"><em>zł/h</em></div></label>
+      </div>
+    </section>
+
+    <section class="card" data-reveal>
+      <h2><span>03</span> Praca i cena</h2>
+      <div class="fields">
+        <label class="field"><span data-u="min">Przygotowanie zlecenia</span><div class="inp"><input id="przygotowanie" type="number" min="0" step="any" value="10"><em>min</em></div></label>
+        <label class="field"><span data-u="min">Obsługa 1 sztuki</span><div class="inp"><input id="obsluga" type="number" min="0" step="any" value="10"><em>min</em></div></label>
+        <label class="field"><span data-u="zł/h">Stawka pracy</span><div class="inp"><input id="stawkaPracy" type="number" min="0" step="any" value="40"><em>zł/h</em></div></label>
+        <label class="field"><span data-u="%">Narzut</span><div class="inp"><input id="narzut" type="number" min="0" step="any" value="20"><em>%</em></div></label>
+      </div>
+    </section>
+  </div>
+
+  <aside class="card result" data-reveal style="--d: .15s" aria-live="polite">
+    <div class="only-zero">
+      <h2>Wynik</h2>
+      <div class="zero-rows">
+        <p>Filament <b data-v="filament"></b></p>
+        <p>Energia <b data-v="prad"></b></p>
+        <p>Czas drukarki <b data-v="druk"></b></p>
+        <p>Praca / szt. <b data-v="praca"></b></p>
+        <p>Koszt / szt. <b data-v="koszt"></b></p>
+        <p>Cena / szt. (z narzutem) <b data-v="cena"></b></p>
+        <p>Razem <b data-v="razem"></b></p>
+      </div>
+    </div>
+
+    <div class="no-zero">
+      <div class="label">Cena za sztukę</div>
+      <div class="price" data-v="cena">0,00 zł</div>
+      <div class="sub">koszt własny <b data-v="koszt">0,00 zł</b> + narzut <b id="rNarzutPct">0%</b></div>
+
+      <div class="bar">
+        <i data-b="filament" style="--c: var(--c-fil)"></i>
+        <i data-b="prad" style="--c: var(--c-prad)"></i>
+        <i data-b="druk" style="--c: var(--c-druk)"></i>
+        <i data-b="praca" style="--c: var(--c-praca)"></i>
+        <i data-b="narzut" style="--c: var(--c-narzut)"></i>
+      </div>
+
+      <div class="rows">
+        <div class="row" style="--c: var(--c-fil)"><i></i><span>Filament</span><small data-p="filament"></small><b data-v="filament"></b></div>
+        <div class="row" style="--c: var(--c-prad)"><i></i><span>Energia</span><small data-p="prad"></small><b data-v="prad"></b></div>
+        <div class="row" style="--c: var(--c-druk)"><i></i><span>Czas drukarki</span><small data-p="druk"></small><b data-v="druk"></b></div>
+        <div class="row" style="--c: var(--c-praca)"><i></i><span>Praca</span><small data-p="praca"></small><b data-v="praca"></b></div>
+        <div class="row sum" style="--c: var(--c-narzut)"><i></i><span>Narzut</span><small data-p="narzut"></small><b data-v="narzut"></b></div>
+      </div>
+
+      <div class="total">
+        <span class="label">Razem · <span id="rSzt">1</span> szt.</span>
+        <b data-v="razem">0,00 zł</b>
+      </div>
+    </div>
+
+    <button class="btn" id="pdf">Pobierz kosztorys PDF</button>
+  </aside>
 </main>
+
+<footer class="no-zero">Kalkulator druku 3D · wycena orientacyjna na podstawie danych ze slicera</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
   const val = (id) => Math.max(0, $(id).valueAsNumber || 0);
   const zl = (x) => x.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " zł";
+  const pct = (x) => Math.round(x) + "%";
+  const poziom = () => document.documentElement.className.replace("lvl-", "");
 
   function oblicz() {
     const sztuki = Math.max(1, Math.round(val("sztuki")));
     const filament = val("masa") / 1000 * val("cenaFil");
     const prad = val("moc") / 1000 * val("czas") * val("cenaPradu");
-    const druk = val("czas") * val("stawka"); 
+    const druk = val("czas") * val("stawka");
     const praca = (val("przygotowanie") + val("obsluga") * sztuki) / 60 * val("stawkaPracy") / sztuki;
     const koszt = filament + prad + druk + praca;
     const cena = koszt * (1 + val("narzut") / 100);
     return { sztuki, filament, prad, druk, praca, koszt, cena, razem: cena * sztuki };
   }
 
-  function pokaz() {
-    const w = oblicz();
-    $("rFil").textContent = zl(w.filament);
-    $("rPrad").textContent = zl(w.prad);
-    $("rDruk").textContent = zl(w.druk);
-    $("rPraca").textContent = zl(w.praca);
-    $("rKoszt").textContent = zl(w.koszt);
-    $("rCena").textContent = zl(w.cena);
-    $("rRazem").textContent = zl(w.razem);
+  // Płynne „przewijanie” liczby od poprzedniej do nowej wartości (na poziomie Zero bez animacji)
+  function animuj(el, to) {
+    const from = el._v ?? 0;
+    el._v = to;
+    cancelAnimationFrame(el._raf);
+    if (poziom() === "zero") { el.textContent = zl(to); return; }
+    const start = performance.now();
+    const krok = (t) => {
+      const p = Math.min(1, (t - start) / 550);
+      el.textContent = zl(from + (to - from) * (1 - Math.pow(1 - p, 4)));
+      if (p < 1) el._raf = requestAnimationFrame(krok);
+    };
+    el._raf = requestAnimationFrame(krok);
   }
 
-  $("pdf").onclick = () => {
+  function pokaz() {
     const w = oblicz();
-    const wiersz = (a, b) => `<tr><td style="padding:6px;border-bottom:1px solid #ccc">${a}</td><td style="padding:6px;border-bottom:1px solid #ccc;text-align:right">${b}</td></tr>`;
+    const v = { ...w, narzut: w.cena - w.koszt };
+    const udzial = (k) => (w.cena ? v[k] / w.cena * 100 : 0);
+    document.querySelectorAll("[data-v]").forEach((el) => animuj(el, v[el.dataset.v]));
+    document.querySelectorAll("[data-p]").forEach((el) => (el.textContent = pct(udzial(el.dataset.p))));
+    document.querySelectorAll("[data-b]").forEach((el) => (el.style.width = udzial(el.dataset.b) + "%"));
+    $("rNarzutPct").textContent = val("narzut") + "%";
+    $("rSzt").textContent = w.sztuki;
+
+    const cena = document.querySelector(".price");
+    cena.classList.remove("bump");
+    void cena.offsetWidth;
+    cena.classList.add("bump");
+  }
+
+  $("pdf").onclick = async () => {
+    const b = $("pdf").getBoundingClientRect();
+    if (ultraRuch()) wybuch(b.left + b.width / 2, b.top + b.height / 2, 120);
+    const w = oblicz();
+    const td = "padding:11px 14px;border-bottom:1px solid #e6e8ef";
+    const wiersz = (a, b) => `<tr><td style="${td}">${a}</td><td style="${td};text-align:right;font-family:Consolas,monospace">${b}</td></tr>`;
     const nazwa = $("nazwa").value.trim().replace(/[<>&]/g, "");
     const html = `
-      <div style="font-family:Arial,sans-serif;padding:30px;color:#000">
-        <h1 style="margin:0">Kosztorys wydruku 3D</h1>
-        <div>Data: ${new Date().toLocaleDateString("pl-PL")}${nazwa ? `<br>Zlecenie: ${nazwa}` : ""}</div>
-        <table style="width:100%;border-collapse:collapse;margin-top:20px">
-          ${wiersz(`Filament (${val("masa")} g)`, zl(w.filament))}
-          ${wiersz(`Energia (${val("czas")} h × ${val("moc")} W)`, zl(w.prad))}
-          ${wiersz(`Czas drukarki (${val("czas")} h)`, zl(w.druk))}
-          ${wiersz(`Praca (${val("przygotowanie")} min przygotowania + ${val("obsluga")} min/szt.)`, zl(w.praca))}
-          ${wiersz("Koszt / szt.", zl(w.koszt))}
-          ${wiersz(`Narzut ${val("narzut")}%`, zl(w.cena - w.koszt))}
-          ${wiersz("Cena / szt.", zl(w.cena))}
-          ${wiersz("Liczba sztuk", w.sztuki)}
-          ${wiersz("<b>Razem do zapłaty</b>", `<b>${zl(w.razem)}</b>`)}
-        </table>
+      <div style="font-family:Arial,sans-serif;color:#1a1c24;background:#fff;width:760px">
+        <div style="background:linear-gradient(135deg,#0b0d14,#23182a);color:#fff;padding:34px 40px">
+          <div style="font-size:12px;letter-spacing:2px;color:#ff8a5c;text-transform:uppercase">Kosztorys</div>
+          <div style="font-size:30px;font-weight:bold;margin-top:6px">Wydruk 3D${nazwa ? ` – ${nazwa}` : ""}</div>
+          <div style="color:#a0a4b8;margin-top:8px;font-size:13px">Data: ${new Date().toLocaleDateString("pl-PL")}</div>
+        </div>
+        <div style="height:5px;background:linear-gradient(90deg,#ff6a3d,#ff3d8b,#a66bff)"></div>
+        <div style="padding:30px 40px">
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <tr style="background:#f4f5f9;font-weight:bold;font-size:12px;text-transform:uppercase;color:#6b7083">
+              <td style="padding:10px 14px">Pozycja</td><td style="padding:10px 14px;text-align:right">Za 1 szt.</td>
+            </tr>
+            ${wiersz(`Filament (${val("masa")} g × ${val("cenaFil")} zł/kg)`, zl(w.filament))}
+            ${wiersz(`Energia (${val("czas")} h × ${val("moc")} W)`, zl(w.prad))}
+            ${wiersz(`Czas drukarki (${val("czas")} h × ${val("stawka")} zł/h)`, zl(w.druk))}
+            ${wiersz(`Praca (${val("przygotowanie")} min przygotowania + ${val("obsluga")} min/szt.)`, zl(w.praca))}
+            ${wiersz("<b>Koszt / szt.</b>", `<b>${zl(w.koszt)}</b>`)}
+            ${wiersz(`Narzut ${val("narzut")}%`, zl(w.cena - w.koszt))}
+            ${wiersz("<b>Cena / szt.</b>", `<b>${zl(w.cena)}</b>`)}
+            ${wiersz("Liczba sztuk", w.sztuki)}
+          </table>
+          <div style="margin-top:26px;padding:22px 26px;border-radius:12px;background:linear-gradient(135deg,#ff6a3d,#ff3d8b);color:#fff;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:15px;font-weight:bold">Razem do zapłaty</span>
+            <span style="font-size:26px;font-weight:bold">${zl(w.razem)}</span>
+          </div>
+          <div style="margin-top:28px;color:#8a8fa3;font-size:11px;line-height:1.5">
+            Wycena orientacyjna przygotowana na podstawie danych ze slicera. Ostateczna cena może się różnić
+            w zależności od rzeczywistego czasu druku i zużycia materiału.
+          </div>
+        </div>
       </div>`;
-    html2pdf().set({ filename: nazwa || "kosztorys"}).from(html).save();
+    const btn = $("pdf");
+    btn.disabled = true;
+    btn.textContent = "Generuję…";
+    try {
+      await html2pdf().set({
+        filename: `${nazwa || "kosztorys"}.pdf`,
+        margin: 0,
+        // scrollX/scrollY: 0, bo html2canvas przesuwa treść o przewinięcie strony i przy długiej stronie PDF wychodził pusty
+        html2canvas: { scale: 2, scrollX: 0, scrollY: 0 },
+        jsPDF: { format: "a4" },
+      }).from(html).save();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Pobierz kosztorys PDF";
+    }
   };
 
-  document.querySelectorAll("input").forEach((i) => i.addEventListener("input", pokaz));
+  // ---------- Animacje poziomu Ultra max ----------
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const ease = (x) => 1 - Math.pow(1 - x, 3);
+  const ruch = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- Iskry na canvasie (Ultra max) ----------
+  const plotno = $("sparks");
+  const ctx = plotno.getContext("2d");
+  const kolory = ["#ff6a3d", "#ff3d8b", "#a66bff", "#3dd6ff", "#ffd23f", "#3dff9e"];
+  const gorace = ["#ffb347", "#ff6a3d", "#ffd23f", "#fff1c1"];
+  const losuj = (a, b) => a + Math.random() * (b - a);
+  const wybierz = (t) => t[Math.floor(Math.random() * t.length)];
+  const ultraRuch = () => ruch && poziom() === "ultra";
+  let iskry = [];
+  let drukuje = false;
+
+  function rozmiarPlotna() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    plotno.width = innerWidth * dpr;
+    plotno.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function iskra(x, y, o = {}) {
+    if (iskry.length > 700) return;
+    iskry.push({
+      x, y, zycie: 0,
+      vx: o.vx ?? losuj(-1, 1), vy: o.vy ?? losuj(-1, 1), g: o.g ?? 0,
+      max: o.max ?? losuj(40, 80), r: o.r ?? losuj(1, 2.5), kolor: o.kolor ?? wybierz(kolory),
+    });
+  }
+
+  function wybuch(x, y, n = 60) {
+    for (let i = 0; i < n; i++) {
+      const kat = Math.random() * Math.PI * 2;
+      const v = losuj(2, 8);
+      iskra(x, y, { vx: Math.cos(kat) * v, vy: Math.sin(kat) * v, g: 0.12, max: losuj(50, 90), r: losuj(1.5, 3.5) });
+    }
+  }
+
+  function klatka() {
+    requestAnimationFrame(klatka);
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (poziom() !== "ultra") { iskry = []; return; }
+
+    // Żarzące się drobinki unoszące się od dołu ekranu
+    if (Math.random() < 0.35) {
+      iskra(losuj(0, innerWidth), innerHeight + 10, { vx: losuj(-.3, .3), vy: losuj(-1.6, -.5), max: losuj(250, 500), r: losuj(.8, 2.2) });
+    }
+    // Iskry spod dyszy w trakcie druku
+    if (drukuje) {
+      const d = document.querySelector(".scene .nozzle").getBoundingClientRect();
+      for (let i = 0; i < 4; i++) {
+        iskra(d.left + d.width / 2, d.bottom, { vx: losuj(-2.5, 2.5), vy: losuj(-3, -.3), g: 0.15, max: losuj(25, 55), kolor: wybierz(gorace) });
+      }
+    }
+
+    ctx.globalCompositeOperation = "lighter";
+    iskry = iskry.filter((s) => {
+      s.zycie++;
+      s.vy += s.g;
+      s.x += s.vx;
+      s.y += s.vy;
+      const a = 1 - s.zycie / s.max;
+      if (a <= 0) return false;
+      ctx.fillStyle = s.kolor;
+      ctx.globalAlpha = a * 0.22;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 4, 0, 7); ctx.fill();
+      ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
+      return true;
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  if (ruch) {
+    rozmiarPlotna();
+    addEventListener("resize", rozmiarPlotna);
+    klatka();
+  }
+
+  // Snop światła i ślad iskier za kursorem
+  addEventListener("pointermove", (e) => {
+    if (!ultraRuch()) return;
+    const spot = $("spot");
+    spot.style.setProperty("--cx", e.clientX + "px");
+    spot.style.setProperty("--cy", e.clientY + "px");
+    for (let i = 0; i < 2; i++) iskra(e.clientX, e.clientY, { max: losuj(20, 45), r: losuj(1, 2.2) });
+  });
+
+  // Zdanie dzielone na słowa, które rozświetlają się podczas przewijania
+  const zdanie = $("statement");
+  zdanie.innerHTML = zdanie.innerHTML.replace(/<em>(.*?)<\/em>|(\S+)/g, (m, wyr, slowo) =>
+    wyr ? wyr.split(" ").map((s) => `<span class="hl">${s}</span>`).join(" ") : `<span>${slowo}</span>`);
+  const slowa = [...zdanie.querySelectorAll("span")];
+
+  function scena() {
+    if (poziom() !== "ultra") return;
+    if (!ruch) { $("sticky").style.setProperty("--build", 1); return; }
+    $("nav").classList.toggle("solid", scrollY > 20);
+
+    const r = $("scene").getBoundingClientRect();
+    const p = clamp(-r.top / (r.height - innerHeight));
+    const t = ease(clamp(p / 0.3));
+    const tekst = $("heroText");
+    tekst.style.opacity = 1 - t;
+    tekst.style.transform = `translateY(${-t * 80}px) scale(${1 - t * 0.06})`;
+    tekst.style.filter = `blur(${t * 10}px)`;
+
+    // Bazowa skala wchodzi w układ strony (margines), powiększenie przy scrollu tylko w transform
+    const baza = Math.min(1.3, innerWidth / 330, innerHeight / 760);
+    const drukarka = $("printer");
+    drukarka.style.marginBottom = (baza - 1) * 250 + "px";
+    drukarka.style.transform = `translateY(${-t * 190}px) scale(${baza * (1 + t * 0.3)})`;
+    $("status").style.transform = `translateY(${-t * 190 + baza * t * 0.3 * 250}px)`;
+
+    const root = document.documentElement;
+    root.style.setProperty("--sp", scrollY / Math.max(1, root.scrollHeight - innerHeight));
+
+    const druk = clamp((p - 0.12) / 0.78);
+    drukuje = druk > 0 && druk < 1;
+    $("sticky").style.setProperty("--build", druk);
+    drukarka.classList.toggle("done", druk >= 1);
+    $("status").classList.toggle("done", druk >= 1);
+    $("status").textContent = druk >= 1 ? "✓ Wydruk gotowy" : p < 0.05 ? "Przewiń, aby wydrukować"
+      : `Warstwa ${Math.round(druk * 700)} / 700`;
+
+    const z = zdanie.getBoundingClientRect();
+    const q = clamp((innerHeight * 0.85 - z.top) / (z.height + innerHeight * 0.25));
+    slowa.forEach((s, i) => s.classList.toggle("lit", i < q * slowa.length));
+  }
+
+  let czeka = false;
+  const naScroll = () => {
+    if (czeka) return;
+    czeka = true;
+    requestAnimationFrame(() => { scena(); czeka = false; });
+  };
+  addEventListener("scroll", naScroll, { passive: true });
+  addEventListener("resize", naScroll);
+
+  // Elementy wjeżdżają z rozmycia, gdy pojawią się na ekranie
+  const obserwator = new IntersectionObserver((wpisy) => {
+    wpisy.forEach((w) => {
+      if (w.isIntersecting) { w.target.classList.add("in"); obserwator.unobserve(w.target); }
+    });
+  }, { threshold: 0.15 });
+  document.querySelectorAll("[data-reveal]").forEach((el) => obserwator.observe(el));
+
+  // „Wyceń wydruk”: cel liczony z offsetTop, bo nagłówek przed animacją wjazdu jest przesunięty transformem
+  document.querySelector(".pill").onclick = (e) => {
+    e.preventDefault();
+    scrollTo({ top: $("wycena").offsetTop - 90, behavior: "smooth" });
+  };
+
+  // Poświata kart podążająca za kursorem
+  document.querySelectorAll(".card").forEach((card) => {
+    card.addEventListener("pointermove", (e) => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", e.clientX - r.left + "px");
+      card.style.setProperty("--my", e.clientY - r.top + "px");
+    });
+  });
+
+  // ---------- Przełącznik „Vibecoded level” ----------
+  const przyciski = document.querySelectorAll(".seg button");
+
+  function ustawSuwak() {
+    const aktywny = document.querySelector(`.seg button[data-lvl="${poziom()}"]`);
+    przyciski.forEach((b) => b.setAttribute("aria-pressed", b === aktywny));
+    const thumb = document.querySelector(".seg .thumb");
+    thumb.style.left = aktywny.offsetLeft + "px";
+    thumb.style.width = aktywny.offsetWidth + "px";
+  }
+
+  function zmienPoziom(lvl) {
+    if (lvl === poziom()) return;
+    const zastosuj = () => {
+      document.documentElement.className = "lvl-" + lvl;
+      try { localStorage.setItem("vibe", lvl); } catch (e) {}
+      scrollTo({ top: 0, behavior: "instant" });
+      ustawSuwak();
+      scena();
+      pokaz();
+    };
+    document.startViewTransition ? document.startViewTransition(zastosuj) : zastosuj();
+  }
+
+  przyciski.forEach((b) => (b.onclick = () => zmienPoziom(b.dataset.lvl)));
+  addEventListener("resize", ustawSuwak);
+  document.fonts?.ready.then(ustawSuwak);
+
+  document.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => {
+    pokaz();
+    if (!ultraRuch()) return;
+    const c = document.querySelector(".price").getBoundingClientRect();
+    if (c.bottom > 0 && c.top < innerHeight) wybuch(c.left + 80, c.top + c.height / 2, 35);
+  }));
+  ustawSuwak();
+  scena();
   pokaz();
 </script>
 </body>
